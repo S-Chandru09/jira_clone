@@ -1,4 +1,5 @@
 "use client";
+
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -10,36 +11,59 @@ import {
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/AuthContext";
 import axiosInstance from "@/lib/axiosinstance";
-import { AlertCircle, ArrowRight, FolderKanban } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowRight,
+  CheckCircle2,
+  FolderKanban,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import React, { useState } from "react";
 
 const page = () => {
   const router = useRouter();
+
   const [isSignUp, setIsSignUp] = useState(false);
+
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     password: "",
   });
+
   const isLoading = false;
+
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
   const { login } = useAuth();
+
   const handleChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-    >,
+    >
   ) => {
     const { name, value } = e.target;
+
     setFormData((prevData) => ({
       ...prevData,
       [name]: value,
     }));
+
     setError("");
+    setSuccess("");
   };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    setError("");
+    setSuccess("");
+
     try {
+      // =========================
+      // SIGN UP
+      // =========================
       if (isSignUp) {
         const res = await axiosInstance.post("/api/users/signup", {
           name: formData.name,
@@ -48,60 +72,118 @@ const page = () => {
           role: "USER",
           avatar: "https://i.pravatar.cc/150?u=john",
         });
+
         const user = res.data;
+
         login(user);
-        router.push("/setup-project");
-      } else {
+
+        setSuccess("Account created successfully!");
+
+        setTimeout(() => {
+          router.push("/setup-project");
+        }, 1500);
+      }
+
+      // =========================
+      // LOGIN
+      // =========================
+      else {
         const res = await axiosInstance.post("/api/users/login", {
           email: formData.email,
           password: formData.password,
         });
+
         const user = res.data;
+
         login(user);
+
         router.push("/");
       }
     } catch (error: any) {
-      setError(error.response?.data?.message);
+      const status = error.response?.status;
+      const message = error.response?.data?.message;
+
+      // Account already exists during signup
+      if (isSignUp && status === 409) {
+        setError("Account is already present.");
+      }
+
+      // Account does not exist during login
+      else if (!isSignUp && status === 404) {
+        setError("Account does not exist.");
+      }
+
+      // Incorrect password during login
+      else if (!isSignUp && status === 401) {
+        setError("Incorrect password.");
+      }
+
+      // Backend returned another message
+      else {
+        setError(
+          message || "Unable to connect to the server. Please try again."
+        );
+      }
+
       console.error(error);
     }
   };
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#F4F5F7] p-4">
       <div className="w-full max-w-md space-y-8">
+        {/* Header */}
         <div className="flex flex-col items-center gap-4 text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded bg-[#0052CC] text-white">
             <FolderKanban className="h-8 w-8" />
           </div>
+
           <h1 className="text-2xl font-bold tracking-tight text-[#172B4D]">
             {isSignUp ? "Create your account" : "Log in to your account"}
           </h1>
         </div>
 
+        {/* Card */}
         <Card className="border-none shadow-xl">
           <CardHeader>
             <CardTitle className="text-lg">
               {isSignUp ? "Get started" : "Welcome back"}
             </CardTitle>
+
             <CardDescription>
               {isSignUp
                 ? "Create an account to start managing your projects"
                 : "Enter your credentials to access your Jira projects"}
             </CardDescription>
           </CardHeader>
+
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Error Message */}
               {error && (
                 <div className="flex gap-3 rounded-md bg-red-50 p-3 text-sm text-red-700">
-                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+
                   <span>{error}</span>
                 </div>
               )}
 
+              {/* Success Message */}
+              {success && (
+                <div className="flex gap-3 rounded-md bg-green-50 p-3 text-sm text-green-700">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+
+                  <span>{success}</span>
+                </div>
+              )}
+
+              {/* Full Name - Signup Only */}
               {isSignUp && (
                 <div className="space-y-2">
                   <label className="text-xs font-bold uppercase text-[#6B778C]">
                     Full name
                   </label>
+
                   <Input
                     type="text"
                     name="name"
@@ -114,10 +196,12 @@ const page = () => {
                 </div>
               )}
 
+              {/* Email */}
               <div className="space-y-2">
                 <label className="text-xs font-bold uppercase text-[#6B778C]">
                   Email address
                 </label>
+
                 <Input
                   type="email"
                   name="email"
@@ -129,10 +213,12 @@ const page = () => {
                 />
               </div>
 
+              {/* Password */}
               <div className="space-y-2">
                 <label className="text-xs font-bold uppercase text-[#6B778C]">
                   Password
                 </label>
+
                 <Input
                   type="password"
                   name="password"
@@ -144,6 +230,7 @@ const page = () => {
                   value={formData.password}
                   onChange={handleChange}
                 />
+
                 {isSignUp && (
                   <p className="text-xs text-[#6B778C]">
                     Password must be at least 6 characters
@@ -151,27 +238,42 @@ const page = () => {
                 )}
               </div>
 
+              {/* Submit Button */}
               <Button
                 type="submit"
                 disabled={isLoading}
                 className="w-full bg-[#0052CC] text-white hover:bg-[#0747A6]"
               >
-                {isLoading ? "Processing..." : isSignUp ? "Sign up" : "Log in"}
+                {isLoading
+                  ? "Processing..."
+                  : isSignUp
+                    ? "Sign up"
+                    : "Log in"}
+
                 {!isLoading && <ArrowRight className="ml-2 h-4 w-4" />}
               </Button>
             </form>
 
+            {/* Switch Login / Signup */}
             <div className="mt-6 text-center text-sm text-[#6B778C]">
               {isSignUp
                 ? "Already have an account? "
                 : "Don't have an account? "}
+
               <button
+                type="button"
                 onClick={() => {
                   setIsSignUp(!isSignUp);
                   setError("");
-                  setFormData({ name: "", email: "", password: "" });
+                  setSuccess("");
+
+                  setFormData({
+                    name: "",
+                    email: "",
+                    password: "",
+                  });
                 }}
-                className="text-[#0052CC] hover:underline font-semibold"
+                className="font-semibold text-[#0052CC] hover:underline"
               >
                 {isSignUp ? "Log in" : "Sign up"}
               </button>
@@ -179,6 +281,7 @@ const page = () => {
           </CardContent>
         </Card>
 
+        {/* Footer */}
         <div className="flex justify-center gap-6 text-xs text-[#6B778C]">
           <span>Privacy Policy</span>
           <span>User Agreement</span>

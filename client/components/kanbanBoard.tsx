@@ -25,9 +25,18 @@ import axiosInstance from "@/lib/axiosinstance";
 import { useAuth } from "@/lib/AuthContext";
 
 const STATUS_COLUMNS = [
-  { id: "TODO", title: "To Do" },
-  { id: "IN_PROGRESS", title: "In Progress" },
-  { id: "DONE", title: "Done" },
+  {
+    id: "TODO",
+    title: "To Do",
+  },
+  {
+    id: "IN_PROGRESS",
+    title: "In Progress",
+  },
+  {
+    id: "DONE",
+    title: "Done",
+  },
 ];
 
 const KanbanBoard = () => {
@@ -40,15 +49,25 @@ const KanbanBoard = () => {
 
   const [issues, setIssues] = useState<any[]>([]);
   const [activeIssue, setActiveIssue] = useState<any | null>(null);
-  const [selectedIssue, setSelectedIssue] = useState<any | null>(null);
+  const [selectedIssue, setSelectedIssue] =
+    useState<any | null>(null);
+
   const [loading, setLoading] = useState(false);
 
-  // Stable mount flag for DragOverlay portal
+  // Used for DragOverlay portal
   const [isMounted, setIsMounted] = useState(false);
+
+  /* =====================================================
+     MOUNT
+  ===================================================== */
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  /* =====================================================
+     DRAG SENSORS
+  ===================================================== */
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -59,12 +78,15 @@ const KanbanBoard = () => {
     useSensor(KeyboardSensor)
   );
 
-  /* =====================
+  /* =====================================================
      FETCH ISSUES
-  ===================== */
+  ===================================================== */
 
   const fetchIssues = async () => {
-    if (!selectedProject?.id) return;
+    if (!selectedProject?.id) {
+      setIssues([]);
+      return;
+    }
 
     try {
       setLoading(true);
@@ -81,41 +103,74 @@ const KanbanBoard = () => {
     }
   };
 
+  /* =====================================================
+     LOAD ISSUES WHEN PROJECT CHANGES
+  ===================================================== */
+
   useEffect(() => {
     fetchIssues();
   }, [selectedProject?.id]);
 
-  /* =====================
+  /* =====================================================
+     REFRESH AFTER ISSUE CREATION
+  ===================================================== */
+
+  useEffect(() => {
+    const handleIssueCreated = () => {
+      fetchIssues();
+    };
+
+    window.addEventListener(
+      "issue-created",
+      handleIssueCreated
+    );
+
+    return () => {
+      window.removeEventListener(
+        "issue-created",
+        handleIssueCreated
+      );
+    };
+  }, [selectedProject?.id]);
+
+  /* =====================================================
      DRAG START
-  ===================== */
+  ===================================================== */
 
   const onDragStart = (event: DragStartEvent) => {
     const issue = issues.find(
-      (i) => i.id === event.active.id
+      (item) => item.id === event.active.id
     );
 
     setActiveIssue(issue || null);
   };
 
-  /* =====================
+  /* =====================================================
      DRAG END
-  ===================== */
+  ===================================================== */
 
   const onDragEnd = async (event: DragEndEvent) => {
     setActiveIssue(null);
 
     const { active, over } = event;
 
-    if (!over) return;
+    if (!over) {
+      return;
+    }
 
     const issueId = active.id as string;
     const newStatus = over.id as string;
 
     const issue = issues.find(
-      (i) => i.id === issueId
+      (item) => item.id === issueId
     );
 
-    if (!issue || issue.status === newStatus) {
+    if (!issue) {
+      return;
+    }
+
+    // Nothing changed
+    if (issue.status === newStatus) {
       return;
     }
 
@@ -126,12 +181,21 @@ const KanbanBoard = () => {
     };
 
     try {
-      // Optimistic update
-      setIssues((prev) =>
-        prev.map((i) =>
-          i.id === issueId ? updatedIssue : i
+      /* ================================================
+         OPTIMISTIC UPDATE
+      ================================================= */
+
+      setIssues((prevIssues) =>
+        prevIssues.map((item) =>
+          item.id === issueId
+            ? updatedIssue
+            : item
         )
       );
+
+      /* ================================================
+         UPDATE BACKEND
+      ================================================= */
 
       await axiosInstance.put(
         `/api/issues/${issueId}`,
@@ -143,10 +207,13 @@ const KanbanBoard = () => {
           status: updatedIssue.status,
           projectId: updatedIssue.projectId,
           reporterId: updatedIssue.reporterId,
-          assigneeId: updatedIssue.assigneeId,
-          sprintId: updatedIssue.sprintId ?? null,
+          assigneeId:
+            updatedIssue.assigneeId ?? null,
+          sprintId:
+            updatedIssue.sprintId ?? null,
           order: updatedIssue.order ?? 0,
-          comments: updatedIssue.comments ?? [],
+          comments:
+            updatedIssue.comments ?? [],
           updatedAt: updatedIssue.updatedAt,
         }
       );
@@ -156,26 +223,50 @@ const KanbanBoard = () => {
         err
       );
 
-      // Rollback if API fails
-      setIssues((prev) =>
-        prev.map((i) =>
-          i.id === issueId ? issue : i
+      /* ================================================
+         ROLLBACK IF API FAILS
+      ================================================= */
+
+      setIssues((prevIssues) =>
+        prevIssues.map((item) =>
+          item.id === issueId
+            ? issue
+            : item
         )
       );
     }
   };
 
-  /* =====================
+  /* =====================================================
      NO PROJECT SELECTED
-  ===================== */
+  ===================================================== */
 
   if (!selectedProject) {
     return (
-      <div className="flex h-full min-h-30 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 text-sm text-[#6B778C]">
+      <div
+        className="
+          flex
+          h-full
+          min-h-30
+          items-center
+          justify-center
+          rounded-xl
+          border
+          border-dashed
+          border-slate-200
+          bg-slate-50
+          text-sm
+          text-[#6B778C]
+        "
+      >
         Select a project to view the board
       </div>
     );
   }
+
+  /* =====================================================
+     BOARD
+  ===================================================== */
 
   return (
     <DndContext
@@ -184,20 +275,45 @@ const KanbanBoard = () => {
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
     >
-      {/* =====================
-          BOARD
-      ===================== */}
+      {/* =================================================
+          BOARD CONTENT
+      ================================================= */}
 
       {loading ? (
-        <div className="flex h-full min-h-30 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-sm text-[#6B778C]">
+        <div
+          className="
+            flex
+            h-full
+            min-h-30
+            items-center
+            justify-center
+            rounded-xl
+            border
+            border-slate-200
+            bg-slate-50
+            text-sm
+            text-[#6B778C]
+          "
+        >
           Loading board…
         </div>
       ) : (
-        <div className="flex h-full min-h-0 gap-4 overflow-x-auto overflow-y-hidden pb-4">
+        <div
+          className="
+            flex
+            h-full
+            min-h-0
+            gap-4
+            overflow-x-auto
+            overflow-y-hidden
+            pb-4
+          "
+        >
           {STATUS_COLUMNS.map((column) => {
             const columnIssues = issues
               .filter(
-                (i) => i.status === column.id
+                (issue) =>
+                  issue.status === column.id
               )
               .filter(
                 (issue) =>
@@ -210,7 +326,8 @@ const KanbanBoard = () => {
               )
               .sort(
                 (a, b) =>
-                  a.order - b.order
+                  (a.order ?? 0) -
+                  (b.order ?? 0)
               );
 
             return (
@@ -225,21 +342,41 @@ const KanbanBoard = () => {
         </div>
       )}
 
-      {/* =====================
+      {/* =================================================
           ISSUE MODAL
-      ===================== */}
+      ================================================= */}
 
       <IssueModel
         issue={selectedIssue}
         isOpen={!!selectedIssue}
-        onClose={() =>
-          setSelectedIssue(null)
-        }
+        onClose={() => {
+          setSelectedIssue(null);
+        }}
+        onIssueDeleted={(issueId: string) => {
+          /*
+           * IMPORTANT:
+           *
+           * Remove the deleted issue directly
+           * from the Kanban board state.
+           *
+           * This means the user does NOT need
+           * to refresh the browser.
+           */
+
+          setIssues((prevIssues) =>
+            prevIssues.filter(
+              (issue) => issue.id !== issueId
+            )
+          );
+
+          // Also close the issue modal
+          setSelectedIssue(null);
+        }}
       />
 
-      {/* =====================
+      {/* =================================================
           DRAG OVERLAY
-      ===================== */}
+      ================================================= */}
 
       {isMounted &&
         !loading &&

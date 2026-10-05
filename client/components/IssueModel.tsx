@@ -12,6 +12,7 @@ import { Trash2, ExternalLink } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Textarea } from "./ui/textarea";
 import { Badge } from "./ui/badge";
+
 import axiosInstance from "@/lib/axiosinstance";
 import { useAuth } from "@/lib/AuthContext";
 
@@ -33,7 +34,17 @@ const typeIcons: Record<string, string> = {
   STORY: "📖",
 };
 
-const IssueModel = ({ issue, isOpen, onClose }: any) => {
+const IssueModel = ({
+  issue,
+  isOpen,
+  onClose,
+  onIssueDeleted,
+}: {
+  issue: any;
+  isOpen: boolean;
+  onClose: () => void;
+  onIssueDeleted?: (issueId: string) => void;
+}) => {
   const { user } = useAuth();
 
   const [assignee, setAssignee] = useState<any>(null);
@@ -68,7 +79,7 @@ const IssueModel = ({ issue, isOpen, onClose }: any) => {
     const fetchAssignee = async () => {
       try {
         const res = await axiosInstance.get(
-          `/api/users/${localIssue.assigneeId}`,
+          `/api/users/${localIssue.assigneeId}`
         );
 
         setAssignee(res.data);
@@ -113,11 +124,10 @@ const IssueModel = ({ issue, isOpen, onClose }: any) => {
           order: localIssue.order ?? 0,
           comments: updatedComments,
           updatedAt: new Date().toISOString(),
-        },
+        }
       );
 
       setLocalIssue(res.data);
-
       setCommentText("");
     } catch (error) {
       console.error("Failed to save comment:", error);
@@ -131,12 +141,12 @@ const IssueModel = ({ issue, isOpen, onClose }: any) => {
   ===================================================== */
 
   const handleDeleteIssue = async () => {
-    if (!localIssue?.id) {
+    if (!localIssue?.id || deleting) {
       return;
     }
 
     const confirmed = window.confirm(
-      `Are you sure you want to delete "${localIssue.title}"?`,
+      `Are you sure you want to delete "${localIssue.title}"?`
     );
 
     if (!confirmed) {
@@ -146,12 +156,21 @@ const IssueModel = ({ issue, isOpen, onClose }: any) => {
     try {
       setDeleting(true);
 
-      await axiosInstance.delete(
-        `/api/issues/${localIssue.id}`,
-      );
+      const issueId = localIssue.id;
 
+      // Delete from backend
+      await axiosInstance.delete(`/api/issues/${issueId}`);
+
+      // IMPORTANT:
+      // Tell KanbanBoard to remove the issue immediately
+      if (onIssueDeleted) {
+        onIssueDeleted(issueId);
+      }
+
+      // Clear local modal state
       setLocalIssue(null);
 
+      // Close modal
       onClose();
     } catch (error: any) {
       console.error("Failed to delete issue:", error);
@@ -162,7 +181,7 @@ const IssueModel = ({ issue, isOpen, onClose }: any) => {
       }
 
       alert(
-        "Failed to delete issue. Check the browser console and backend console.",
+        "Failed to delete issue. Check the browser console and backend console."
       );
     } finally {
       setDeleting(false);
@@ -196,10 +215,7 @@ const IssueModel = ({ issue, isOpen, onClose }: any) => {
   };
 
   return (
-    <Dialog
-      open={isOpen}
-      onOpenChange={handleOpenChange}
-    >
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent
         className="
           w-240!
@@ -215,9 +231,7 @@ const IssueModel = ({ issue, isOpen, onClose }: any) => {
           shadow-2xl
         "
       >
-        {/* =================================================
-            HEADER
-        ================================================= */}
+        {/* HEADER */}
 
         <DialogHeader
           className="
@@ -259,14 +273,13 @@ const IssueModel = ({ issue, isOpen, onClose }: any) => {
                 text-[#172B4D]
               "
             >
-              {localIssue?.key
-                ? localIssue.key
-                : "Issue"}
+              {localIssue?.key || "Issue"}
             </DialogTitle>
           </div>
 
           <div className="flex items-center gap-1">
-            {/* Delete */}
+            {/* DELETE */}
+
             <Button
               type="button"
               variant="ghost"
@@ -282,10 +295,15 @@ const IssueModel = ({ issue, isOpen, onClose }: any) => {
               "
               title="Delete issue"
             >
-              <Trash2 className="h-4 w-4" />
+              {deleting ? (
+                <span className="text-xs">...</span>
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
             </Button>
 
-            {/* Open */}
+            {/* OPEN */}
+
             <Button
               type="button"
               variant="ghost"
@@ -304,10 +322,6 @@ const IssueModel = ({ issue, isOpen, onClose }: any) => {
             </Button>
           </div>
         </DialogHeader>
-
-        {/* =================================================
-            CONTENT
-        ================================================= */}
 
         {!localIssue ? (
           <div className="flex h-64 items-center justify-center">
@@ -332,9 +346,7 @@ const IssueModel = ({ issue, isOpen, onClose }: any) => {
                   md:grid-cols-[minmax(0,1fr)_260px]
                 "
               >
-                {/* =================================================
-                    MAIN CONTENT
-                ================================================= */}
+                {/* MAIN CONTENT */}
 
                 <main
                   className="
@@ -343,7 +355,7 @@ const IssueModel = ({ issue, isOpen, onClose }: any) => {
                     py-6
                   "
                 >
-                  {/* Title */}
+                  {/* TITLE */}
 
                   <h1
                     className="
@@ -358,7 +370,7 @@ const IssueModel = ({ issue, isOpen, onClose }: any) => {
                     {localIssue.title}
                   </h1>
 
-                  {/* Description */}
+                  {/* DESCRIPTION */}
 
                   <section className="mb-8">
                     <h3
@@ -399,7 +411,7 @@ const IssueModel = ({ issue, isOpen, onClose }: any) => {
                     </div>
                   </section>
 
-                  {/* Comments */}
+                  {/* COMMENTS */}
 
                   <section>
                     <div className="mb-4 flex items-center justify-between">
@@ -422,14 +434,12 @@ const IssueModel = ({ issue, isOpen, onClose }: any) => {
                       </h3>
                     </div>
 
-                    {/* Existing comments */}
-
                     {localIssue.comments?.length > 0 ? (
                       <div className="mb-6 space-y-3">
                         {localIssue.comments.map(
                           (
                             comment: string,
-                            index: number,
+                            index: number
                           ) => (
                             <div
                               key={index}
@@ -456,8 +466,7 @@ const IssueModel = ({ issue, isOpen, onClose }: any) => {
                                   >
                                     {user?.name
                                       ?.charAt(0)
-                                      ?.toUpperCase() ||
-                                      "U"}
+                                      ?.toUpperCase() || "U"}
                                   </AvatarFallback>
                                 </Avatar>
 
@@ -470,8 +479,7 @@ const IssueModel = ({ issue, isOpen, onClose }: any) => {
                                         text-[#172B4D]
                                       "
                                     >
-                                      {user?.name ||
-                                        "User"}
+                                      {user?.name || "User"}
                                     </span>
                                   </div>
 
@@ -489,7 +497,7 @@ const IssueModel = ({ issue, isOpen, onClose }: any) => {
                                 </div>
                               </div>
                             </div>
-                          ),
+                          )
                         )}
                       </div>
                     ) : (
@@ -505,7 +513,7 @@ const IssueModel = ({ issue, isOpen, onClose }: any) => {
                       </p>
                     )}
 
-                    {/* Add comment */}
+                    {/* ADD COMMENT */}
 
                     <div className="flex items-start gap-3">
                       <Avatar className="h-8 w-8 shrink-0">
@@ -561,9 +569,7 @@ const IssueModel = ({ issue, isOpen, onClose }: any) => {
                               hover:bg-[#0747A6]
                             "
                           >
-                            {loading
-                              ? "Saving..."
-                              : "Save"}
+                            {loading ? "Saving..." : "Save"}
                           </Button>
                         </div>
                       </div>
@@ -571,9 +577,7 @@ const IssueModel = ({ issue, isOpen, onClose }: any) => {
                   </section>
                 </main>
 
-                {/* =================================================
-                    SIDEBAR
-                ================================================= */}
+                {/* SIDEBAR */}
 
                 <aside
                   className="
@@ -588,7 +592,7 @@ const IssueModel = ({ issue, isOpen, onClose }: any) => {
                   "
                 >
                   <div className="space-y-7">
-                    {/* Status */}
+                    {/* STATUS */}
 
                     <div>
                       <p
@@ -619,7 +623,7 @@ const IssueModel = ({ issue, isOpen, onClose }: any) => {
                       </Badge>
                     </div>
 
-                    {/* Type */}
+                    {/* TYPE */}
 
                     <div>
                       <p
@@ -646,20 +650,17 @@ const IssueModel = ({ issue, isOpen, onClose }: any) => {
                         "
                       >
                         <span>
-                          {typeIcons[localIssue.type] ||
-                            "✓"}
+                          {typeIcons[localIssue.type] || "✓"}
                         </span>
 
                         <span>
-                          {typeLabels[
-                            localIssue.type
-                          ] ||
+                          {typeLabels[localIssue.type] ||
                             localIssue.type}
                         </span>
                       </div>
                     </div>
 
-                    {/* Priority */}
+                    {/* PRIORITY */}
 
                     <div>
                       <p
@@ -683,11 +684,9 @@ const IssueModel = ({ issue, isOpen, onClose }: any) => {
                           text-xs
                           font-semibold
                           ${
-                            localIssue.priority ===
-                            "HIGH"
+                            localIssue.priority === "HIGH"
                               ? "bg-[#FFEBE6] text-[#BF2600]"
-                              : localIssue.priority ===
-                                  "LOW"
+                              : localIssue.priority === "LOW"
                                 ? "bg-[#E3FCEF] text-[#006644]"
                                 : "bg-[#FFF0B3] text-[#7A5C00]"
                           }
@@ -701,7 +700,7 @@ const IssueModel = ({ issue, isOpen, onClose }: any) => {
                       </Badge>
                     </div>
 
-                    {/* Assignee */}
+                    {/* ASSIGNEE */}
 
                     <div>
                       <p
@@ -720,9 +719,7 @@ const IssueModel = ({ issue, isOpen, onClose }: any) => {
                       {assignee ? (
                         <div className="flex min-w-0 items-center gap-3">
                           <Avatar className="h-9 w-9 shrink-0">
-                            <AvatarImage
-                              src={assignee.avatar}
-                            />
+                            <AvatarImage src={assignee.avatar} />
 
                             <AvatarFallback
                               className="
@@ -732,8 +729,7 @@ const IssueModel = ({ issue, isOpen, onClose }: any) => {
                             >
                               {assignee.name
                                 ?.charAt(0)
-                                ?.toUpperCase() ||
-                                "U"}
+                                ?.toUpperCase() || "U"}
                             </AvatarFallback>
                           </Avatar>
 
@@ -777,9 +773,7 @@ const IssueModel = ({ issue, isOpen, onClose }: any) => {
               </div>
             </div>
 
-            {/* =================================================
-                FOOTER
-            ================================================= */}
+            {/* FOOTER */}
 
             <div
               className="

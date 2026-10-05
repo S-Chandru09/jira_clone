@@ -15,23 +15,78 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+
 import { useAuth } from "@/lib/AuthContext";
-import { Mail, Save } from "lucide-react";
-import React, { useRef, useState } from "react";
+import axiosInstance from "@/lib/axiosinstance";
+
+import {
+  AlertCircle,
+  CheckCircle2,
+  Mail,
+  Save,
+} from "lucide-react";
+
+import React, {
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 const page = () => {
-  const { user } = useAuth();
+  const {
+    user,
+    login,
+  } = useAuth();
 
-  // Profile picture
+  // =========================
+  // PROFILE PICTURE
+  // =========================
+
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [profileImage, setProfileImage] = useState(user?.avatar || "");
 
-  // Open file picker
+  const [profileImage, setProfileImage] = useState(
+    user?.avatar || ""
+  );
+
+  // =========================
+  // PROFILE FORM
+  // =========================
+
+  const [name, setName] = useState(
+    user?.name || ""
+  );
+
+  const [isSaving, setIsSaving] = useState(false);
+
+  const [successMessage, setSuccessMessage] =
+    useState("");
+
+  const [errorMessage, setErrorMessage] =
+    useState("");
+
+  // =========================
+  // KEEP FORM IN SYNC WITH USER
+  // =========================
+
+  useEffect(() => {
+    if (user) {
+      setName(user.name || "");
+      setProfileImage(user.avatar || "");
+    }
+  }, [user]);
+
+  // =========================
+  // OPEN FILE PICKER
+  // =========================
+
   const handleProfilePictureClick = () => {
     fileInputRef.current?.click();
   };
 
-  // Select profile picture
+  // =========================
+  // SELECT PROFILE PICTURE
+  // =========================
+
   const handleProfilePictureChange = (
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
@@ -53,17 +108,94 @@ const page = () => {
 
     // Preview selected image
     const imageUrl = URL.createObjectURL(file);
+
     setProfileImage(imageUrl);
   };
 
+  // =========================
+  // SAVE PROFILE
+  // =========================
+
+  const handleSaveChanges = async () => {
+    if (!user?.id) {
+      setErrorMessage("User information is not available.");
+      return;
+    }
+
+    if (!name.trim()) {
+      setErrorMessage("Name cannot be empty.");
+      setSuccessMessage("");
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+
+      setErrorMessage("");
+      setSuccessMessage("");
+
+      const response = await axiosInstance.put(
+        `/api/users/${user.id}`,
+        {
+          name: name.trim(),
+          group: user.group || "",
+          avatar: user.avatar || "",
+        }
+      );
+
+      const updatedUser = response.data;
+
+      // Update AuthContext + localStorage immediately
+      login(updatedUser);
+
+      // Keep selected preview
+      if (profileImage) {
+        setProfileImage(profileImage);
+      }
+
+      setSuccessMessage(
+        "Profile updated successfully."
+      );
+    } catch (error: any) {
+      console.error(
+        "Failed to update profile:",
+        error
+      );
+
+      setErrorMessage(
+        error?.response?.data?.message ||
+          "Failed to update profile. Please try again."
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // =========================
+  // USER NOT FOUND
+  // =========================
+
   if (!user) {
-    return <div className="p-6">User not found</div>;
+    return (
+      <div className="p-6">
+        User not found
+      </div>
+    );
   }
 
+  // =========================
+  // UI
+  // =========================
+
   return (
-    <div className="flex h-full flex-col p-6 overflow-auto bg-[#F4F5F7]">
+    <div className="flex h-full flex-col overflow-auto bg-[#F4F5F7] p-6">
+
+      {/* =========================
+          PAGE HEADER
+      ========================= */}
+
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-[#172B4D] mb-2">
+        <h1 className="mb-2 text-3xl font-bold text-[#172B4D]">
           Profile Settings
         </h1>
 
@@ -72,10 +204,14 @@ const page = () => {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
 
-        {/* ================= PROFILE CARD ================= */}
+        {/* =========================
+            PROFILE CARD
+        ========================= */}
+
         <Card className="lg:col-span-1">
+
           <CardHeader>
             <CardTitle className="text-[#172B4D]">
               About You
@@ -83,21 +219,32 @@ const page = () => {
           </CardHeader>
 
           <CardContent>
+
             <div className="space-y-4">
 
-              {/* Profile */}
+              {/* PROFILE */}
+
               <div className="flex flex-col items-center">
 
-                <Avatar className="h-20 w-20 mb-4">
+                <Avatar className="mb-4 h-20 w-20">
+
                   <AvatarImage
-                    src={profileImage || "/placeholder.svg"}
+                    src={
+                      profileImage ||
+                      "/placeholder.svg"
+                    }
                     alt={user.name}
                   />
 
                   <AvatarFallback>
-                    {user.name.charAt(0).toUpperCase()}
+                    {user.name
+                      .charAt(0)
+                      .toUpperCase()}
                   </AvatarFallback>
+
                 </Avatar>
+
+                {/* UPDATED NAME */}
 
                 <h2 className="text-xl font-semibold text-[#172B4D]">
                   {user.name}
@@ -106,61 +253,85 @@ const page = () => {
                 <Badge className="mt-2">
                   {user.role}
                 </Badge>
+
               </div>
 
-              {/* User information */}
-              <div className="space-y-3 pt-4 border-t">
+              {/* USER INFORMATION */}
+
+              <div className="space-y-3 border-t pt-4">
 
                 <div className="flex items-center gap-3 text-sm">
+
                   <Mail className="h-4 w-4 text-[#5E6C84]" />
 
                   <span className="text-[#172B4D]">
                     {user.email}
                   </span>
+
                 </div>
 
                 <div className="flex items-center gap-3 text-sm">
+
                   <span className="text-[#5E6C84]">
                     Group:
                   </span>
 
-                  <Badge variant="outline">
-                    {user?.group}
-                  </Badge>
+                  {user.group ? (
+                    <Badge variant="outline">
+                      {user.group}
+                    </Badge>
+                  ) : (
+                    <span className="text-[#A5ADBA]">
+                      Not assigned
+                    </span>
+                  )}
+
                 </div>
 
               </div>
 
-              {/* ================= EDIT PROFILE PICTURE ================= */}
+              {/* EDIT PROFILE PICTURE */}
 
               <Button
                 type="button"
-                onClick={handleProfilePictureClick}
+                onClick={
+                  handleProfilePictureClick
+                }
                 className="w-full bg-[#0052CC] text-white hover:bg-[#0747A6]"
               >
                 Edit Profile Picture
               </Button>
 
-              {/* Hidden file input */}
+              {/* HIDDEN FILE INPUT */}
+
               <input
                 ref={fileInputRef}
                 type="file"
                 accept="image/png,image/jpeg,image/jpg,image/webp"
                 className="hidden"
-                onChange={handleProfilePictureChange}
+                onChange={
+                  handleProfilePictureChange
+                }
               />
 
             </div>
+
           </CardContent>
+
         </Card>
 
-        {/* ================= SETTINGS ================= */}
+        {/* =========================
+            SETTINGS
+        ========================= */}
 
-        <div className="lg:col-span-2 space-y-6">
+        <div className="space-y-6 lg:col-span-2">
 
-          {/* Personal Information */}
+          {/* PERSONAL INFORMATION */}
+
           <Card>
+
             <CardHeader>
+
               <CardTitle className="text-[#172B4D]">
                 Personal Information
               </CardTitle>
@@ -168,82 +339,170 @@ const page = () => {
               <CardDescription>
                 Update your contact details
               </CardDescription>
+
             </CardHeader>
 
             <CardContent>
+
               <div className="space-y-4">
 
-                {/* Full Name */}
+                {/* SUCCESS MESSAGE */}
+
+                {successMessage && (
+                  <div className="flex items-center gap-3 rounded-lg border border-[#ABF5D1] bg-[#E3FCEF] px-4 py-3 text-sm text-[#006644]">
+
+                    <CheckCircle2 className="h-5 w-5" />
+
+                    <span>
+                      {successMessage}
+                    </span>
+
+                  </div>
+                )}
+
+                {/* ERROR MESSAGE */}
+
+                {errorMessage && (
+                  <div className="flex items-center gap-3 rounded-lg border border-[#FFBDAD] bg-[#FFEBE6] px-4 py-3 text-sm text-[#BF2600]">
+
+                    <AlertCircle className="h-5 w-5" />
+
+                    <span>
+                      {errorMessage}
+                    </span>
+
+                  </div>
+                )}
+
+                {/* FULL NAME */}
+
                 <div>
-                  <label className="text-sm font-semibold text-[#172B4D] mb-1 block">
+
+                  <label
+                    htmlFor="full-name"
+                    className="mb-1 block text-sm font-semibold text-[#172B4D]"
+                  >
                     Full Name
                   </label>
 
                   <Input
-                    defaultValue={user.name}
+                    id="full-name"
+                    type="text"
+                    value={name}
+                    onChange={(e) => {
+                      setName(e.target.value);
+                      setSuccessMessage("");
+                      setErrorMessage("");
+                    }}
                     className="focus-visible:ring-[#0052CC]"
                   />
+
                 </div>
 
-                {/* Email */}
+                {/* EMAIL */}
+
                 <div>
-                  <label className="text-sm font-semibold text-[#172B4D] mb-1 block">
+
+                  <label
+                    htmlFor="email"
+                    className="mb-1 block text-sm font-semibold text-[#172B4D]"
+                  >
                     Email
                   </label>
 
                   <Input
+                    id="email"
                     type="email"
-                    defaultValue={user.email}
-                    className="focus-visible:ring-[#0052CC]"
+                    value={user.email}
+                    disabled
+                    className="bg-[#F4F5F7] text-[#6B778C]"
                   />
+
                 </div>
 
-                {/* Role + Team */}
+                {/* ROLE + TEAM */}
+
                 <div className="grid grid-cols-2 gap-4">
 
+                  {/* ROLE */}
+
                   <div>
-                    <label className="text-sm font-semibold text-[#172B4D] mb-1 block">
+
+                    <label
+                      htmlFor="role"
+                      className="mb-1 block text-sm font-semibold text-[#172B4D]"
+                    >
                       Role
                     </label>
 
                     <Input
+                      id="role"
                       disabled
-                      defaultValue={user.role}
-                      className="focus-visible:ring-[#0052CC]"
+                      value={user.role || ""}
+                      className="bg-[#F4F5F7] text-[#6B778C]"
                     />
+
                   </div>
 
+                  {/* TEAM */}
+
                   <div>
-                    <label className="text-sm font-semibold text-[#172B4D] mb-1 block">
+
+                    <label
+                      htmlFor="team"
+                      className="mb-1 block text-sm font-semibold text-[#172B4D]"
+                    >
                       Team
                     </label>
 
                     <Input
+                      id="team"
                       disabled
-                      defaultValue={user?.group}
-                      className="focus-visible:ring-[#0052CC]"
+                      value={user.group || ""}
+                      placeholder="Not assigned"
+                      className="bg-[#F4F5F7] text-[#6B778C]"
                     />
+
                   </div>
 
                 </div>
 
-                {/* Save */}
+                {/* SAVE */}
+
                 <div className="flex justify-end pt-4">
 
-                  <Button className="bg-[#0052CC] text-white hover:bg-[#0747A6]">
-                    <Save className="h-4 w-4 mr-2" />
-                    Save Changes
+                  <Button
+                    type="button"
+                    onClick={handleSaveChanges}
+                    disabled={
+                      isSaving ||
+                      !name.trim()
+                    }
+                    className="bg-[#0052CC] text-white hover:bg-[#0747A6]"
+                  >
+
+                    <Save className="mr-2 h-4 w-4" />
+
+                    {isSaving
+                      ? "Saving..."
+                      : "Save Changes"}
+
                   </Button>
 
                 </div>
 
               </div>
+
             </CardContent>
+
           </Card>
 
-          {/* ================= ACTIVITY ================= */}
+          {/* =========================
+              ACTIVITY
+          ========================= */}
 
           <Card>
+
             <CardHeader>
 
               <CardTitle className="text-[#172B4D]">
@@ -260,29 +519,35 @@ const page = () => {
 
               <div className="space-y-3">
 
-                {/* Account Created */}
+                {/* ACCOUNT CREATED */}
+
                 <div className="flex justify-between text-sm">
 
                   <span className="text-[#5E6C84]">
                     Account Created
                   </span>
 
-                  <span className="text-[#172B4D] font-semibold">
-                    {new Date(
-                      user?.createdAt
-                    ).toLocaleDateString()}
+                  <span className="font-semibold text-[#172B4D]">
+
+                    {user.createdAt
+                      ? new Date(
+                          user.createdAt
+                        ).toLocaleDateString()
+                      : "—"}
+
                   </span>
 
                 </div>
 
-                {/* Last Login */}
-                <div className="flex justify-between text-sm border-t pt-3">
+                {/* LAST LOGIN */}
+
+                <div className="flex justify-between border-t pt-3 text-sm">
 
                   <span className="text-[#5E6C84]">
                     Last Login
                   </span>
 
-                  <span className="text-[#172B4D] font-semibold">
+                  <span className="font-semibold text-[#172B4D]">
                     Today at 2:45 PM
                   </span>
 
@@ -291,10 +556,13 @@ const page = () => {
               </div>
 
             </CardContent>
+
           </Card>
 
         </div>
+
       </div>
+
     </div>
   );
 };

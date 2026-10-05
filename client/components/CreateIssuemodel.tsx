@@ -14,7 +14,15 @@ import { Textarea } from "./ui/textarea";
 import { useAuth } from "@/lib/AuthContext";
 import axiosInstance from "@/lib/axiosinstance";
 
-const CreateIssuemodel = ({ isOpen, onClose }: any) => {
+const CreateIssuemodel = ({
+  isOpen,
+  onClose,
+  onIssueCreated,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onIssueCreated?: (issue: any) => void;
+}) => {
   const { user, selectedProject } = useAuth();
 
   const [isloading, setIsloading] = useState(false);
@@ -29,6 +37,10 @@ const CreateIssuemodel = ({ isOpen, onClose }: any) => {
     assigneeId: "",
   });
 
+  /* =====================
+     FETCH TEAM MEMBERS
+  ===================== */
+
   useEffect(() => {
     if (!selectedProject?.id || !isOpen) return;
 
@@ -40,12 +52,16 @@ const CreateIssuemodel = ({ isOpen, onClose }: any) => {
 
         setTeamMembers(res.data.members || []);
       } catch (error) {
-        console.error(error);
+        console.error("Failed to fetch team members", error);
       }
     };
 
     fetchMembers();
   }, [selectedProject?.id, isOpen]);
+
+  /* =====================
+     HANDLE INPUT CHANGE
+  ===================== */
 
   const handleChange = (
     e: React.ChangeEvent<
@@ -62,6 +78,10 @@ const CreateIssuemodel = ({ isOpen, onClose }: any) => {
     setError("");
   };
 
+  /* =====================
+     CREATE ISSUE
+  ===================== */
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -72,8 +92,9 @@ const CreateIssuemodel = ({ isOpen, onClose }: any) => {
 
     try {
       setIsloading(true);
+      setError("");
 
-      await axiosInstance.post("/api/issues", {
+      const response = await axiosInstance.post("/api/issues", {
         title: formData.title,
         description: formData.description,
         type: formData.type,
@@ -85,9 +106,32 @@ const CreateIssuemodel = ({ isOpen, onClose }: any) => {
         order: 0,
       });
 
+      /* =====================
+         UPDATE KANBAN BOARD
+      ===================== */
+
+      // If a callback is provided, update through the callback
+      if (onIssueCreated) {
+        onIssueCreated(response.data);
+      }
+
+      // Also notify the Kanban board globally.
+      // This is useful because the Create Issue modal
+      // is opened from the sidebar/global layout.
+      window.dispatchEvent(
+        new CustomEvent("issue-created", {
+          detail: response.data,
+        })
+      );
+
+      // Close modal after successful creation
       onClose();
     } catch (error) {
-      console.error(error);
+      console.error("Failed to create issue", error);
+
+      setError(
+        "Failed to create issue. Please try again."
+      );
     } finally {
       setIsloading(false);
 
@@ -103,8 +147,12 @@ const CreateIssuemodel = ({ isOpen, onClose }: any) => {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-h-[90vh] w-[95vw] max-w-2xl overflow-y-auto rounded-xl border border-slate-200 bg-white p-0 shadow-2xl">
-        <DialogHeader className="border-b border-slate-200 px-6 py-5">
+      <DialogContent className="max-h-[90vh] w-[95vw] max-w-2xl overflow-y-auto rounded-xl border border-[#DFE1E6] bg-white p-0 shadow-2xl">
+        {/* =====================
+            HEADER
+        ===================== */}
+
+        <DialogHeader className="border-b border-[#DFE1E6] px-6 py-5">
           <DialogTitle className="text-xl font-semibold text-[#172B4D]">
             Create Issue
           </DialogTitle>
@@ -114,19 +162,33 @@ const CreateIssuemodel = ({ isOpen, onClose }: any) => {
           </p>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-6 px-6 py-6">
+        {/* =====================
+            FORM
+        ===================== */}
+
+        <form
+          onSubmit={handleSubmit}
+          className="space-y-6 px-6 py-6"
+        >
           {/* Error */}
           {error && (
-            <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div className="flex items-center gap-3 rounded-lg border border-[#FFBDAD] bg-[#FFEBE6] px-4 py-3 text-sm text-[#BF2600]">
               <AlertCircle className="h-4 w-4 shrink-0" />
+
               <span>{error}</span>
             </div>
           )}
 
-          {/* Issue Title */}
+          {/* =====================
+              ISSUE TITLE
+          ===================== */}
+
           <div className="space-y-2">
             <label className="text-sm font-semibold text-[#172B4D]">
-              Issue Title *
+              Issue Title
+              <span className="ml-1 text-[#DE350B]">
+                *
+              </span>
             </label>
 
             <Input
@@ -136,11 +198,14 @@ const CreateIssuemodel = ({ isOpen, onClose }: any) => {
               required
               value={formData.title}
               onChange={handleChange}
-              className="h-10 border-slate-300 text-sm shadow-none focus-visible:ring-2 focus-visible:ring-[#0052CC]"
+              className="h-10 border-[#DFE1E6] text-sm text-[#172B4D] shadow-none placeholder:text-[#7A869A] focus-visible:border-[#0052CC] focus-visible:ring-2 focus-visible:ring-[#DEEBFF]"
             />
           </div>
 
-          {/* Description */}
+          {/* =====================
+              DESCRIPTION
+          ===================== */}
+
           <div className="space-y-2">
             <label className="text-sm font-semibold text-[#172B4D]">
               Description
@@ -151,11 +216,14 @@ const CreateIssuemodel = ({ isOpen, onClose }: any) => {
               placeholder="Add a description (optional)"
               value={formData.description}
               onChange={handleChange}
-              className="min-h-28 resize-none border-slate-300 text-sm shadow-none focus-visible:ring-2 focus-visible:ring-[#0052CC]"
+              className="min-h-28 resize-none border-[#DFE1E6] text-sm text-[#172B4D] shadow-none placeholder:text-[#7A869A] focus-visible:border-[#0052CC] focus-visible:ring-2 focus-visible:ring-[#DEEBFF]"
             />
           </div>
 
-          {/* Type / Priority / Assignee */}
+          {/* =====================
+              TYPE / PRIORITY / ASSIGNEE
+          ===================== */}
+
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
             {/* Type */}
             <div className="space-y-2">
@@ -167,7 +235,7 @@ const CreateIssuemodel = ({ isOpen, onClose }: any) => {
                 name="type"
                 value={formData.type}
                 onChange={handleChange}
-                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-[#172B4D] outline-none transition focus:border-[#0052CC] focus:ring-2 focus:ring-blue-100"
+                className="h-10 w-full rounded-md border border-[#DFE1E6] bg-white px-3 text-sm text-[#172B4D] outline-none transition focus:border-[#0052CC] focus:ring-2 focus:ring-[#DEEBFF]"
               >
                 <option value="TASK">Task</option>
                 <option value="BUG">Bug</option>
@@ -185,7 +253,7 @@ const CreateIssuemodel = ({ isOpen, onClose }: any) => {
                 name="priority"
                 value={formData.priority}
                 onChange={handleChange}
-                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-[#172B4D] outline-none transition focus:border-[#0052CC] focus:ring-2 focus:ring-blue-100"
+                className="h-10 w-full rounded-md border border-[#DFE1E6] bg-white px-3 text-sm text-[#172B4D] outline-none transition focus:border-[#0052CC] focus:ring-2 focus:ring-[#DEEBFF]"
               >
                 <option value="LOW">Low</option>
                 <option value="MEDIUM">Medium</option>
@@ -203,9 +271,11 @@ const CreateIssuemodel = ({ isOpen, onClose }: any) => {
                 name="assigneeId"
                 value={formData.assigneeId}
                 onChange={handleChange}
-                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-[#172B4D] outline-none transition focus:border-[#0052CC] focus:ring-2 focus:ring-blue-100"
+                className="h-10 w-full rounded-md border border-[#DFE1E6] bg-white px-3 text-sm text-[#172B4D] outline-none transition focus:border-[#0052CC] focus:ring-2 focus:ring-[#DEEBFF]"
               >
-                <option value="">Unassigned</option>
+                <option value="">
+                  Unassigned
+                </option>
 
                 {teamMembers.map((member: any) => (
                   <option
@@ -219,14 +289,17 @@ const CreateIssuemodel = ({ isOpen, onClose }: any) => {
             </div>
           </div>
 
-          {/* Buttons */}
-          <div className="flex justify-end gap-3 border-t border-slate-200 pt-5">
+          {/* =====================
+              BUTTONS
+          ===================== */}
+
+          <div className="flex justify-end gap-3 border-t border-[#DFE1E6] pt-5">
             <Button
               type="button"
               variant="outline"
               onClick={onClose}
               disabled={isloading}
-              className="border-slate-300 px-5 text-sm text-[#5E6C84] hover:bg-slate-50"
+              className="border-[#DFE1E6] bg-white px-5 text-sm font-medium text-[#5E6C84] hover:bg-[#F4F5F7]"
             >
               Cancel
             </Button>
@@ -234,9 +307,11 @@ const CreateIssuemodel = ({ isOpen, onClose }: any) => {
             <Button
               type="submit"
               disabled={isloading}
-              className="bg-[#0052CC] px-5 text-sm text-white hover:bg-[#0747A6]"
+              className="bg-[#0052CC] px-5 text-sm font-semibold text-white hover:bg-[#0747A6]"
             >
-              {isloading ? "Creating..." : "Create Issue"}
+              {isloading
+                ? "Creating..."
+                : "Create Issue"}
             </Button>
           </div>
         </form>

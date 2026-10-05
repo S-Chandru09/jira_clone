@@ -1,6 +1,11 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 
 type User = {
   id: string;
@@ -11,6 +16,7 @@ type User = {
   group?: string;
   createdAt?: any;
 };
+
 export type Project = {
   id: string;
   name: string;
@@ -26,43 +32,74 @@ type AuthContextType = {
   login: (user: User) => void;
   logout: () => void;
   selectedProject: Project | null;
-  setSelectedProject: (Project: Project | null) => void;
+  setSelectedProject: (project: Project | null) => void;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+export const AuthProvider = ({
+  children,
+}: {
+  children: React.ReactNode;
+}) => {
   const [user, setUser] = useState<User | null>(null);
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-  // Load user from localStorage on first load
+  const [selectedProject, setSelectedProject] =
+    useState<Project | null>(null);
+
+  // =========================
+  // LOAD USER
+  // =========================
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
+
     if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-    const storedproject = localStorage.getItem("selectedProject");
-    if (storedproject) {
-      setSelectedProject(JSON.parse(storedproject));
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch {
+        localStorage.removeItem("user");
+      }
     }
   }, []);
 
+  // =========================
+  // LOGIN
+  // =========================
   const login = (userData: User) => {
+    // Clear any project belonging to a previous account
+    setSelectedProject(null);
+    localStorage.removeItem("selectedProject");
+
     setUser(userData);
     localStorage.setItem("user", JSON.stringify(userData));
   };
 
+  // =========================
+  // LOGOUT
+  // =========================
   const logout = () => {
     setUser(null);
+    setSelectedProject(null);
+
     localStorage.removeItem("user");
+    localStorage.removeItem("selectedProject");
   };
-  const handleslecteproject = (project: Project | null) => {
+
+  // =========================
+  // SELECT PROJECT
+  // =========================
+  const handleSelectProject = (project: Project | null) => {
     setSelectedProject(project);
+
     if (project) {
-      localStorage.setItem("selectedProject", JSON.stringify(project));
+      localStorage.setItem(
+        "selectedProject",
+        JSON.stringify(project)
+      );
     } else {
       localStorage.removeItem("selectedProject");
     }
   };
+
   return (
     <AuthContext.Provider
       value={{
@@ -71,7 +108,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         login,
         logout,
         selectedProject,
-        setSelectedProject: handleslecteproject,
+        setSelectedProject: handleSelectProject,
       }}
     >
       {children}
@@ -81,6 +118,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
 export const useAuth = () => {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
+
+  if (!ctx) {
+    throw new Error(
+      "useAuth must be used inside AuthProvider"
+    );
+  }
+
   return ctx;
 };
